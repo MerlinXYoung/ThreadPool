@@ -27,8 +27,9 @@
 
 class ThreadPool {
 public:
-    ThreadPool(size_t threads );
-    inline ThreadPool():ThreadPool(std::max(2u, std::thread::hardware_concurrency())){}
+    using initialize_type = std::function<void()>;
+    ThreadPool(size_t threads, initialize_type initialize=[](){ } );
+    inline ThreadPool():ThreadPool(std::max(2u, std::thread::hardware_concurrency()) ){}
     ThreadPool(ThreadPool&& pool);
     template<class F, class... Args>
 #if __cplusplus >= 201402L
@@ -37,6 +38,10 @@ public:
     auto enqueue(F&& f, Args&&... args) 
         -> std::future<typename std::result_of<F(Args...)>::type>;
 #endif
+    inline size_t size()const noexcept{
+        return workers.size();
+    }
+
     ~ThreadPool();
 private:
     
@@ -47,11 +52,13 @@ private:
     std::vector< std::thread > workers;
     // the task queue
     using task_type = std::function<void()>;
+
     std::queue< task_type > tasks;
     
     // synchronization
     std::mutex queue_mutex;
     std::condition_variable condition;
+    using lock_type = std::unique_lock<std::mutex>;
     bool stop;
 };
 
@@ -75,7 +82,7 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
         
     std::future<return_type> res = task->get_future();
     {
-        std::unique_lock<std::mutex> lock(queue_mutex);
+        lock_type lock(queue_mutex);
 
         // don't allow enqueueing after stopping the pool
         if(stop)

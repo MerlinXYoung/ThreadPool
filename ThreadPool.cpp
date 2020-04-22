@@ -1,14 +1,16 @@
 #include "ThreadPool.h"
 
-using lock_type = std::unique_lock<std::mutex>;
+
 // the constructor just launches some amount of workers
-ThreadPool::ThreadPool(size_t threads)
+ThreadPool::ThreadPool(size_t threads, initialize_type initialize)
     :   stop(false)
 {
     for(size_t i = 0;i<threads;++i)
         workers.emplace_back(
-            [this]
+            [this, initialize]
             {
+                initialize();
+
                 for(;;)
                 {
                     task_type task;
